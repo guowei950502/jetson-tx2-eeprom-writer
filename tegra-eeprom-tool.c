@@ -89,7 +89,7 @@ static struct {
 	{ "write",	do_write, 	"write updated EEPROM contents" },
 	{ "quit",	NULL,		"exit from program" },
 };
-static const int non_oneshot_commands = 2;
+static const int non_oneshot_commands = 0;
 
 static struct option options[] = {
 	{ "device",		required_argument,	0, 'd' },
@@ -579,7 +579,7 @@ main (int argc, char * const argv[])
 	context_t ctx = NULL;
 	option_routine_t dispatch = NULL;
 	char *argv0_copy = strdup(argv[0]);
-        char *eeprom_device = NULL;
+    char *eeprom_device = NULL;
 	cvm_i2c_address_t i2c_address;
 	const cvm_i2c_address_t *i2caddr;
 	int use_i2c;
@@ -651,8 +651,10 @@ main (int argc, char * const argv[])
 		eeprompath[len] = '\0';
 		if (access(eeprompath, F_OK) == 0)
 			eeprom_device = eeprompath;
-		else
+		else {
 			use_i2c = 1;
+			// printf("use_i2c = %d\n",use_i2c);
+		}
 	}
 
 	ctx = calloc(1, sizeof(struct context_s));

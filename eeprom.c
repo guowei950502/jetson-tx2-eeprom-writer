@@ -111,8 +111,10 @@ int
 eeprom_data_valid (eeprom_context_t ctx)
 {
 	struct module_eeprom_v1_raw *data = &ctx->eeprom_data;
-	if (data->crc8 != calc_crc8((uint8_t *) data, 255))
+	if (data->crc8 != calc_crc8((uint8_t *) data, 255)) {
+		printf("crc8 = %x\n" ,calc_crc8((uint8_t *) data, 255));
 		return 0;
+	}
 	if (ctx->soctype == TEGRA_SOCTYPE_234) {
 		if (data->major_version != LAYOUT_VERSION_T234)
 			return 0;
@@ -215,9 +217,42 @@ smbus_read (int fd, void *buf, size_t bufsize)
 			return err;
 		*bp++ = data.byte & 0xFF;
 	}
+
 	return (ssize_t) offset;
 
 } /* smbus_read */
+
+/* smbus_write */
+
+ssize_t
+smbus_write (int fd, void *buf, size_t bufsize)
+{	
+	uint8_t *bp = buf;
+	size_t offset;
+	int err;
+
+	union i2c_smbus_data data;
+	struct i2c_smbus_ioctl_data args = {
+		.read_write = I2C_SMBUS_WRITE,
+		.size = I2C_SMBUS_BYTE_DATA,
+		.data = &data,
+	};
+
+	for (offset = 0; offset < bufsize; offset += 1) {
+		args.command = offset;
+		data.byte = *bp++;
+		printf("read_write = %d size = %d command = %d data.byte = %d\n",args.read_write,
+			args.size, args.command, data.byte);
+		err = ioctl(fd, I2C_SMBUS, &args);
+		usleep(5000);
+		if (err < 0) 
+			return err;
+	} 
+	
+	return (ssize_t) offset;
+}
+
+/* smbus_write */
 
 /*
  * open_common
@@ -273,7 +308,8 @@ eeprom_open_i2c (unsigned int bus, unsigned int addr, eeprom_module_type_t mtype
 		return NULL;
 	}
 
-	return open_common(fd, mtype, 1, smbus_read);
+	// return open_common(fd, mtype, 1, smbus_read);
+	return open_common(fd, mtype, 0, smbus_read);
 
 } /* eeprom_open_i2c */
 
@@ -448,20 +484,24 @@ eeprom_write (eeprom_context_t ctx, module_eeprom_t *data)
 		if (ctx->mtype == module_type_cvb)
 			memcpy(rawdata->system_partnumber_v2, data->system_partnumber,
 			       sizeof(rawdata->system_partnumber_v2));
-		memcpy(rawdata->system_serialnumber_v2, data->system_serialnumber,
+			memcpy(rawdata->system_serialnumber_v2, data->system_serialnumber,
 		       sizeof(rawdata->system_serialnumber_v2));
 	}
 	rawdata->length = htole16(sizeof(*rawdata) - 1);
 	rawdata->crc8 = calc_crc8((uint8_t *) rawdata, 255);
 
-	if (lseek(ctx->fd, 0, SEEK_SET) < 0)
+	// bp = (uint8_t *) rawdata;
+	// for (remain = sizeof(*rawdata); remain > 0; remain -= n, bp += n) {
+	// 	n = write(ctx->fd, bp, remain);
+	// 	if (n < 0)
+	// 		return -1;
+	// }
+
+	if ( smbus_write(ctx->fd, rawdata, 
+		sizeof(*rawdata)) < 0 ) {
 		return -1;
-	bp = (uint8_t *) rawdata;
-	for (remain = sizeof(*rawdata); remain > 0; remain -= n, bp += n) {
-		n = write(ctx->fd, bp, remain);
-		if (n < 0)
-			return -1;
 	}
+
 	return 0;
 
 } /* eeprom_write */
